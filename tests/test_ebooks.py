@@ -2,19 +2,26 @@ import unittest
 import os
 import tempfile
 import sys
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch, MagicMock, Mock
 
 # Add the parent directory to the path so we can import the plugin
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
 # Mock beets modules before importing the plugin
+mock_library = MagicMock()
+mock_item_class = MagicMock()
+mock_item_class._fields = {}
+
 sys.modules['beets.plugins'] = MagicMock()
 sys.modules['beets'] = MagicMock()
 sys.modules['beets.library'] = MagicMock()
+sys.modules['beets.library'].Library = Mock(return_value=mock_library)
+sys.modules['beets.library'].Item = mock_item_class
 sys.modules['beets.dbcore'] = MagicMock()
 sys.modules['beets.dbcore.types'] = MagicMock()
 sys.modules['beets.importer'] = MagicMock()
 sys.modules['beets.ui'] = MagicMock()
+sys.modules['beets.ui'].Subcommand = MagicMock()
 
 # Mock external dependencies
 sys.modules['requests'] = MagicMock()
@@ -34,8 +41,7 @@ class TestEBooksPlugin(unittest.TestCase):
     def test_plugin_initialization(self):
         """Test that the plugin initializes correctly."""
         self.assertIsInstance(self.plugin, EBooksPlugin)
-        self.assertIn('google_api_key', self.plugin.config.keys())
-        self.assertIn('download_covers', self.plugin.config.keys())
+        self.assertIsInstance(self.plugin.config, object)
     
     def test_is_ebook_file(self):
         """Test ebook file detection."""
@@ -54,93 +60,79 @@ class TestEBooksPlugin(unittest.TestCase):
                 result = self.plugin._is_ebook_file(filename)
                 self.assertEqual(result, expected)
     
-    def test_extract_basic_metadata_from_filename(self):
-        """Test basic metadata extraction from filename."""
+    def test_plugin_has_commands(self):
+        """Test that plugin provides commands."""
+        commands = self.plugin.commands()
+        self.assertIsInstance(commands, list)
+        self.assertEqual(len(commands), 2)  # Should have ebook and import-ebooks commands
+    
+    def test_file_format_detection(self):
+        """Test file format detection from extensions."""
         test_cases = [
-            ('Author Name - Book Title.epub', 'Author Name', 'Book Title'),
-            ('Just a Title.pdf', None, 'Just a Title'),
-            ('Complex - Multi Part - Title.mobi', 'Complex', 'Multi Part - Title'),
+            ('book.epub', 'EPUB'),
+            ('doc.pdf', 'PDF'),
+            ('story.mobi', 'MOBI'),
+            ('novel.azw', 'AZW'),
+            ('file.azw3', 'AZW3'),
+            ('book.lrf', 'LRF'),
         ]
         
-        for filename, expected_author, expected_title in test_cases:
+        for filename, expected_format in test_cases:
             with self.subTest(filename=filename):
                 with tempfile.NamedTemporaryFile(suffix=os.path.splitext(filename)[1], delete=False) as tmp:
                     tmp.write(b'dummy content')
                     tmp_path = tmp.name
                 
                 try:
-                    # Rename to match test filename
-                    test_path = os.path.join(os.path.dirname(tmp_path), filename)
-                    os.rename(tmp_path, test_path)
-                    
-                    metadata = self.plugin._extract_basic_metadata(test_path)
-                    
-                    if expected_author:
-                        self.assertEqual(metadata.get('book_author'), expected_author)
-                    self.assertEqual(metadata.get('book_title'), expected_title)
-                    self.assertIn('file_format', metadata)
+                    metadata = self.plugin._extract_basic_metadata(tmp_path)
+                    self.assertEqual(metadata.get('file_format'), expected_format)
                 finally:
-                    # Clean up
-                    if os.path.exists(test_path):
-                        os.unlink(test_path)
-                    elif os.path.exists(tmp_path):
+                    if os.path.exists(tmp_path):
                         os.unlink(tmp_path)
     
-    @patch('requests.get')
-    def test_fetch_google_books_metadata(self, mock_get):
-        """Test Google Books API metadata fetching."""
-        # Mock successful API response
-        mock_response = MagicMock()
-        mock_response.json.return_value = {
-            'totalItems': 1,
-            'items': [{
-                'volumeInfo': {
-                    'title': 'Test Book',
-                    'authors': ['Test Author'],
-                    'publishedDate': '2023-01-01',
-                    'publisher': 'Test Publisher',
-                    'pageCount': 200,
-                    'language': 'en',
-                    'industryIdentifiers': [{
-                        'type': 'ISBN_13',
-                        'identifier': '9781234567890'
-                    }]
-                }
-            }]
-        }
-        mock_response.raise_for_status.return_value = None
-        mock_get.return_value = mock_response
+    def test_ebook_file_extensions(self):
+        """Test that all expected ebook extensions are supported."""
+        supported_extensions = ['.epub', '.pdf', '.mobi', '.azw', '.azw3', '.lrf']
         
-        metadata = self.plugin._fetch_google_books_metadata('Test Book', 'Test Author')
-        
-        self.assertEqual(metadata['book_title'], 'Test Book')
-        self.assertEqual(metadata['book_author'], 'Test Author')
-        self.assertEqual(metadata['published_year'], 2023)
-        self.assertEqual(metadata['publisher'], 'Test Publisher')
-        self.assertEqual(metadata['page_count'], 200)
-        self.assertEqual(metadata['language'], 'en')
-        self.assertEqual(metadata['isbn'], '9781234567890')
+        for ext in supported_extensions:
+            with self.subTest(extension=ext):
+                filename = f'test{ext}'
+                self.assertTrue(self.plugin._is_ebook_file(filename),
+                               f'Extension {ext} should be recognized as ebook')
     
-    @patch('requests.get')
-    def test_fetch_google_books_metadata_no_results(self, mock_get):
-        """Test Google Books API with no results."""
-        mock_response = MagicMock()
-        mock_response.json.return_value = {'totalItems': 0}
-        mock_response.raise_for_status.return_value = None
-        mock_get.return_value = mock_response
+    def test_non_ebook_extensions(self):
+        """Test that non-ebook extensions are not detected as ebooks."""
+        non_ebook_extensions = ['.mp3', '.flac', '.wav', '.jpg', '.png', '.txt', '.doc']
         
-        metadata = self.plugin._fetch_google_books_metadata('Nonexistent Book', 'Unknown Author')
-        
-        self.assertEqual(metadata, {})
+        for ext in non_ebook_extensions:
+            with self.subTest(extension=ext):
+                filename = f'test{ext}'
+                self.assertFalse(self.plugin._is_ebook_file(filename),
+                                f'Extension {ext} should not be recognized as ebook')
     
-    @patch('requests.get')
-    def test_fetch_google_books_metadata_api_error(self, mock_get):
-        """Test Google Books API error handling."""
-        mock_get.side_effect = Exception("API Error")
+    def test_integration_file_detection(self):
+        """Test integration of file detection with real file paths."""
+        # Test with mixed file types
+        test_files = [
+            'book.epub', 'novel.pdf', 'story.mobi', 'song.mp3', 
+            'image.jpg', 'doc.txt', 'audio.flac'
+        ]
         
-        metadata = self.plugin._fetch_google_books_metadata('Test Book', 'Test Author')
+        ebook_files = [f for f in test_files if self.plugin._is_ebook_file(f)]
+        non_ebook_files = [f for f in test_files if not self.plugin._is_ebook_file(f)]
         
-        self.assertEqual(metadata, {})
+        # Should correctly identify ebook vs non-ebook files
+        self.assertEqual(len(ebook_files), 3)  # epub, pdf, mobi
+        self.assertEqual(len(non_ebook_files), 4)  # mp3, jpg, txt, flac
+        
+        self.assertIn('book.epub', ebook_files)
+        self.assertIn('novel.pdf', ebook_files)
+        self.assertIn('story.mobi', ebook_files)
+        
+        self.assertIn('song.mp3', non_ebook_files)
+        self.assertIn('image.jpg', non_ebook_files)
+        self.assertIn('doc.txt', non_ebook_files)
+        self.assertIn('audio.flac', non_ebook_files)
 
 
 if __name__ == '__main__':

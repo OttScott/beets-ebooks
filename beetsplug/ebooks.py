@@ -11,6 +11,8 @@ try:
     from beets.dbcore import types
     from beets.importer import ImportTask
     import beets.ui
+    import beets.util
+    from beets.library import Item
     BEETS_AVAILABLE = True
 except ImportError:
     # Beets not installed - this is expected during development
@@ -57,6 +59,7 @@ class EBooksPlugin(BeetsPlugin):
         'page_count': types.Integer() if BEETS_AVAILABLE else int,
         'language': types.String() if BEETS_AVAILABLE else str,
         'file_format': types.String() if BEETS_AVAILABLE else str,
+        'ebook': types.Boolean() if BEETS_AVAILABLE else bool,  # Flag to identify ebooks
     }
 
     def __init__(self):
@@ -66,10 +69,85 @@ class EBooksPlugin(BeetsPlugin):
             'download_covers': True,
             'ebook_extensions': ['.epub', '.pdf', '.mobi', '.lrf', '.azw', '.azw3'],
             'metadata_sources': ['google_books', 'open_library'],
+            'auto_import': True,  # Automatically import ebooks during beet import
         })
 
-        # Register import hooks
-        self.register_listener('import_task_created', self.import_stage)
+    def import_task_files_hook(self, session, task):
+        """Hook called during import to handle ebook files."""
+        if not hasattr(task, 'paths'):
+            return
+            
+        ebook_paths = []
+        non_ebook_paths = []
+        
+        # Separate ebook files from regular files
+        for path in task.paths:
+            if os.path.isfile(path) and self._is_ebook_file(path):
+                ebook_paths.append(path)
+            else:
+                non_ebook_paths.append(path)
+        
+        # If we found ebooks, process them
+        if ebook_paths:
+            logger.info(f"Found {len(ebook_paths)} ebook(s) to import")
+            for ebook_path in ebook_paths:
+                self._import_ebook_to_library(ebook_path, session.lib)
+                
+            # Remove ebook paths from the task so beets doesn't try to process them as music
+            task.paths = non_ebook_paths
+
+    def _import_ebook_to_library(self, file_path, lib):
+        """Import an ebook file into the beets library."""
+        try:
+            logger.info(f"Importing ebook: {file_path}")
+            
+            # Extract metadata
+            metadata = self._extract_basic_metadata(file_path)
+            
+            # Enrich with external metadata
+            if metadata.get('book_title') or metadata.get('book_author'):
+                external_metadata = self._fetch_external_metadata(
+                    metadata.get('book_title', ''),
+                    metadata.get('book_author', '')
+                )
+                metadata.update(external_metadata)
+            
+            # Create a beets library item
+            item = Item()
+            
+            # Map ebook metadata to beets fields
+            # Use title and artist fields that beets expects, plus our custom fields
+            item.title = metadata.get('book_title', os.path.splitext(os.path.basename(file_path))[0])
+            item.artist = metadata.get('book_author', 'Unknown Author')
+            item.album = metadata.get('book_title', item.title)
+            item.albumartist = item.artist
+            
+            # Set our custom ebook fields
+            item.book_author = metadata.get('book_author', '')
+            item.book_title = metadata.get('book_title', '')
+            item.isbn = metadata.get('isbn', '')
+            item.published_year = metadata.get('published_year', 0)
+            item.publisher = metadata.get('publisher', '')
+            item.page_count = metadata.get('page_count', 0)
+            item.language = metadata.get('language', '')
+            item.file_format = metadata.get('file_format', '')
+            item.ebook = True  # Flag to identify this as an ebook
+            
+            # Set file path and basic properties
+            item.path = beets.util.bytestring_path(file_path)
+            item.length = 0  # Ebooks don't have length in seconds
+            item.bitrate = 0
+            item.format = metadata.get('file_format', '').lower()
+            
+            # Add to library
+            lib.add(item)
+            logger.info(f"Added ebook to library: {item.artist} - {item.title}")
+            
+            return item
+            
+        except Exception as e:
+            logger.error(f"Error importing ebook {file_path}: {e}")
+            return None
 
     def _is_ebook_file(self, filename):
         """Check if a file is an ebook based on its extension."""
@@ -288,8 +366,9 @@ class EBooksPlugin(BeetsPlugin):
 
     def commands(self):
         """Return command-line commands provided by this plugin."""
+        
         def ebook_func(lib, opts, args):
-            """Handle the 'ebook' command."""
+            """Handle the 'ebook' command - display metadata only."""
             if args:
                 paths = args
             else:
@@ -322,11 +401,55 @@ class EBooksPlugin(BeetsPlugin):
                 else:
                     print(f"Skipping non-ebook file: {path}")
         
+        def import_ebooks_func(lib, opts, args):
+            """Handle the 'import-ebooks' command - actually import to beets library."""
+            if args:
+                paths = args
+            else:
+                print("Usage: beet import-ebooks <path> [<path> ...]")
+                print("This command imports ebooks into your beets library.")
+                return
+            
+            imported_count = 0
+            for path in paths:
+                if os.path.isdir(path):
+                    # Process directory
+                    for root, _, files in os.walk(path):
+                        for file in files:
+                            if self._is_ebook_file(file):
+                                full_path = os.path.join(root, file)
+                                item = self._import_ebook_to_library(full_path, lib)
+                                if item:
+                                    imported_count += 1
+                                    print(f"✅ Imported: {item.artist} - {item.title}")
+                elif os.path.isfile(path) and self._is_ebook_file(path):
+                    # Process single file
+                    item = self._import_ebook_to_library(path, lib)
+                    if item:
+                        imported_count += 1
+                        print(f"✅ Imported: {item.artist} - {item.title}")
+                else:
+                    print(f"❌ Skipping non-ebook: {path}")
+            
+            if imported_count > 0:
+                print(f"\n🎉 Successfully imported {imported_count} ebook(s) to your beets library!")
+                print("You can now use:")
+                print("  beet ls ebook:true")
+                print("  beet ls book_author:tolkien")
+                print("  beet ls book_title:'lord of the rings'")
+            else:
+                print("❌ No ebooks were imported.")
+        
+        # Create commands
         try:
             import beets.ui
-            ebook_cmd = beets.ui.Subcommand('ebook', help='process ebook files')
+            ebook_cmd = beets.ui.Subcommand('ebook', help='display ebook metadata')
             ebook_cmd.func = ebook_func
-            return [ebook_cmd]
+            
+            import_cmd = beets.ui.Subcommand('import-ebooks', help='import ebooks into beets library')
+            import_cmd.func = import_ebooks_func
+            
+            return [ebook_cmd, import_cmd]
         except ImportError:
             # beets.ui not available (development mode)
             return []
