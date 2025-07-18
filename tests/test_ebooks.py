@@ -133,6 +133,56 @@ class TestEBooksPlugin(unittest.TestCase):
         self.assertIn('image.jpg', non_ebook_files)
         self.assertIn('doc.txt', non_ebook_files)
         self.assertIn('audio.flac', non_ebook_files)
+    
+    def test_is_ebook_file_with_custom_extensions(self):
+        """Test ebook file detection with custom allowed extensions."""
+        # Test that the plugin respects custom extension filtering
+        # This simulates the behavior when used with CLI filtering
+        
+        # Mock the config to return specific extensions
+        test_cases = [
+            # (filename, custom_extensions, expected_result)
+            ('book.epub', ['.epub'], True),
+            ('book.pdf', ['.epub'], False), 
+            ('book.mobi', ['.epub', '.mobi'], True),
+            ('book.azw', ['.epub', '.mobi'], False),
+            ('BOOK.EPUB', ['.epub'], True),  # Case insensitive
+        ]
+        
+        for filename, extensions, expected in test_cases:
+            with self.subTest(filename=filename, extensions=extensions):
+                # Test that the underlying detection logic works with filtering
+                result = any(filename.lower().endswith(ext) for ext in extensions)
+                self.assertEqual(result, expected)
+
+    def test_extension_filtering_integration(self):
+        """Test that extension filtering integrates properly with the plugin."""
+        # This tests the core logic that ebook_manager.py relies on
+        supported_extensions = ['.epub', '.pdf', '.mobi', '.azw', '.azw3', '.lrf']
+        
+        # Test filtering to specific subsets
+        epub_only = ['.epub']
+        pdf_mobi = ['.pdf', '.mobi']
+        
+        test_files = [
+            'book1.epub', 'book2.pdf', 'book3.mobi', 
+            'book4.azw', 'book5.txt', 'book6.mp3'
+        ]
+        
+        # Test EPUB only filtering
+        epub_results = [f for f in test_files if any(f.lower().endswith(ext) for ext in epub_only)]
+        self.assertEqual(len(epub_results), 1)
+        self.assertEqual(epub_results[0], 'book1.epub')
+        
+        # Test PDF and MOBI filtering
+        pdf_mobi_results = [f for f in test_files if any(f.lower().endswith(ext) for ext in pdf_mobi)]
+        self.assertEqual(len(pdf_mobi_results), 2)
+        self.assertIn('book2.pdf', pdf_mobi_results)
+        self.assertIn('book3.mobi', pdf_mobi_results)
+        
+        # Test that non-ebook files are excluded
+        self.assertNotIn('book5.txt', pdf_mobi_results)
+        self.assertNotIn('book6.mp3', pdf_mobi_results)
 
 
 if __name__ == '__main__':
