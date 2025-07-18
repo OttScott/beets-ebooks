@@ -17,6 +17,16 @@ from pathlib import Path
 BEETS_EXE = r"F:\ottsc\AppData\Roaming\Python\Python313\Scripts\beet.exe"
 EBOOK_EXTENSIONS = ['.epub', '.pdf', '.mobi', '.lrf', '.azw', '.azw3']
 
+# Priority order for --onefile feature (higher priority = preferred format)
+FORMAT_PRIORITY = {
+    '.epub': 6,    # Highest priority
+    '.mobi': 5,
+    '.azw': 4,
+    '.azw3': 3,
+    '.pdf': 2,
+    '.lrf': 1      # Lowest priority
+}
+
 def is_ebook_file(filename, allowed_extensions=None):
     """Check if a file is an ebook based on its extension."""
     extensions = allowed_extensions or EBOOK_EXTENSIONS
@@ -30,6 +40,61 @@ def find_ebooks(directory, allowed_extensions=None):
             if is_ebook_file(file, allowed_extensions):
                 ebooks.append(os.path.join(root, file))
     return ebooks
+
+def extract_book_identifier(filepath):
+    """Extract a simple book identifier from filename for grouping."""
+    filename = os.path.basename(filepath)
+    # Remove extension
+    name_without_ext = os.path.splitext(filename)[0]
+    
+    # Simple approach: try to extract "Author - Title" pattern
+    if ' - ' in name_without_ext:
+        parts = name_without_ext.split(' - ', 1)
+        if len(parts) == 2:
+            author = parts[0].strip()
+            title = parts[1].strip()
+            # Remove common suffixes like "(1)", "[2005]", etc.
+            import re
+            title = re.sub(r'\s*[\(\[][^)\]]*[\)\]]\s*$', '', title)
+            return f"{author} - {title}".lower()
+    
+    # Fallback: use the base filename without extension
+    return name_without_ext.lower()
+
+def filter_onefile_per_book(ebooks):
+    """Filter ebooks to keep only one file per book (highest priority format)."""
+    if not ebooks:
+        return ebooks
+    
+    # Group ebooks by book identifier
+    book_groups = {}
+    for ebook_path in ebooks:
+        book_id = extract_book_identifier(ebook_path)
+        if book_id not in book_groups:
+            book_groups[book_id] = []
+        book_groups[book_id].append(ebook_path)
+    
+    # Select best format for each book
+    filtered_ebooks = []
+    for book_id, book_files in book_groups.items():
+        if len(book_files) == 1:
+            # Only one file for this book
+            filtered_ebooks.append(book_files[0])
+        else:
+            # Multiple files - select the highest priority format
+            best_file = max(book_files, key=lambda f: FORMAT_PRIORITY.get(
+                os.path.splitext(f)[1].lower(), 0
+            ))
+            filtered_ebooks.append(best_file)
+            
+            # Log what we're skipping
+            skipped = [f for f in book_files if f != best_file]
+            print(f"Book: {book_id}")
+            print(f"  Selected: {os.path.basename(best_file)}")
+            for skipped_file in skipped:
+                print(f"  Skipped:  {os.path.basename(skipped_file)}")
+    
+    return filtered_ebooks
 
 def process_ebook_with_beets(ebook_path):
     """Process an ebook using the beets ebook command."""
@@ -67,19 +132,26 @@ def import_ebook_to_beets(ebook_path):
         print(f"Beets executable not found at {BEETS_EXE}")
         return None
 
-def scan_collection(directory, allowed_extensions=None):
+def scan_collection(directory, allowed_extensions=None, onefile=False):
     """Scan an ebook collection and process each file."""
     print(f"Scanning ebook collection in: {directory}")
     if allowed_extensions:
         print(f"Filtering by extensions: {allowed_extensions}")
+    if onefile:
+        print("One-file mode: selecting highest priority format per book")
     
     ebooks = find_ebooks(directory, allowed_extensions)
+    
+    if onefile:
+        print(f"\nFound {len(ebooks)} total ebook(s) before filtering")
+        ebooks = filter_onefile_per_book(ebooks)
+        print(f"After one-file filtering: {len(ebooks)} ebook(s)")
     
     if not ebooks:
         print("No ebook files found.")
         return
     
-    print(f"Found {len(ebooks)} ebook(s)")
+    print(f"Processing {len(ebooks)} ebook(s)")
     print("-" * 50)
     
     for i, ebook in enumerate(ebooks, 1):
@@ -89,13 +161,20 @@ def scan_collection(directory, allowed_extensions=None):
             print(output.strip())
         print("-" * 50)
 
-def import_collection(directory, allowed_extensions=None):
+def import_collection(directory, allowed_extensions=None, onefile=False):
     """Import an ebook collection to beets library."""
     print(f"Importing ebook collection from: {directory}")
     if allowed_extensions:
         print(f"Filtering by extensions: {allowed_extensions}")
+    if onefile:
+        print("One-file mode: selecting highest priority format per book")
     
     ebooks = find_ebooks(directory, allowed_extensions)
+    
+    if onefile:
+        print(f"\nFound {len(ebooks)} total ebook(s) before filtering")
+        ebooks = filter_onefile_per_book(ebooks)
+        print(f"After one-file filtering: {len(ebooks)} ebook(s)")
     
     if not ebooks:
         print("No ebook files found.")
@@ -123,13 +202,20 @@ def import_collection(directory, allowed_extensions=None):
     print("-" * 50)
     print(f"Import completed: {imported}/{len(ebooks)} ebooks imported successfully")
 
-def batch_import_ebooks(directory, allowed_extensions=None):
+def batch_import_ebooks(directory, allowed_extensions=None, onefile=False):
     """Import ebooks to beets library using batch import command."""
     print(f"Batch importing ebooks from: {directory}")
     if allowed_extensions:
         print(f"Filtering by extensions: {allowed_extensions}")
+    if onefile:
+        print("One-file mode: selecting highest priority format per book")
     
     ebooks = find_ebooks(directory, allowed_extensions)
+    
+    if onefile:
+        print(f"\nFound {len(ebooks)} total ebook(s) before filtering")
+        ebooks = filter_onefile_per_book(ebooks)
+        print(f"After one-file filtering: {len(ebooks)} ebook(s)")
     
     if not ebooks:
         print("No ebook files found.")
@@ -143,8 +229,8 @@ def batch_import_ebooks(directory, allowed_extensions=None):
         return
     
     try:
-        if allowed_extensions:
-            # When filtering by extensions, import files individually
+        if allowed_extensions or onefile:
+            # When filtering by extensions or using onefile, import files individually
             imported = 0
             for ebook in ebooks:
                 print(f"\nImporting: {os.path.basename(ebook)}")
@@ -232,13 +318,20 @@ def test_organization(dry_run=True):
     except FileNotFoundError:
         print(f"Beets executable not found at {BEETS_EXE}")
 
-def suggest_organization(directory, allowed_extensions=None):
+def suggest_organization(directory, allowed_extensions=None, onefile=False):
     """Suggest how to organize ebooks based on metadata."""
     print(f"Analyzing collection structure in: {directory}")
     if allowed_extensions:
         print(f"Filtering by extensions: {allowed_extensions}")
+    if onefile:
+        print("One-file mode: selecting highest priority format per book")
     
     ebooks = find_ebooks(directory, allowed_extensions)
+    
+    if onefile:
+        print(f"\nFound {len(ebooks)} total ebook(s) before filtering")
+        ebooks = filter_onefile_per_book(ebooks)
+        print(f"After one-file filtering: {len(ebooks)} ebook(s)")
     
     if not ebooks:
         print("No ebook files found.")
@@ -272,18 +365,20 @@ def suggest_organization(directory, allowed_extensions=None):
         for author in sorted(authors):
             print(f"  - {author}")
     
-    print(f"\nSuggested organization structure:")
-    print(f"  📁 {directory}/")
-    print("    📁 Author Name/")
-    print("      📄 Book Title.epub")
-    print("    📁 Another Author/")
-    print("      📄 Another Book.pdf")
+    print("\nSuggested organization structure:")
+    print(f"  [Books] {directory}/")
+    print("    [Author] Author Name/")
+    print("      [Book] Book Title.epub")
+    print("    [Author] Another Author/")
+    print("      [Book] Another Book.pdf")
 
-def import_single_directory(directory, recursive=False, allowed_extensions=None):
+def import_single_directory(directory, recursive=False, allowed_extensions=None, onefile=False):
     """Import ebooks from a single directory (non-recursive by default)."""
     print(f"Importing ebooks from: {directory}")
     if allowed_extensions:
         print(f"Filtering by extensions: {allowed_extensions}")
+    if onefile:
+        print("One-file mode: selecting highest priority format per book")
     
     if recursive:
         ebooks = find_ebooks(directory, allowed_extensions)
@@ -294,6 +389,11 @@ def import_single_directory(directory, recursive=False, allowed_extensions=None)
             for file in os.listdir(directory):
                 if is_ebook_file(file, allowed_extensions):
                     ebooks.append(os.path.join(directory, file))
+    
+    if onefile:
+        print(f"\nFound {len(ebooks)} total ebook(s) before filtering")
+        ebooks = filter_onefile_per_book(ebooks)
+        print(f"After one-file filtering: {len(ebooks)} ebook(s)")
     
     if not ebooks:
         print("No ebook files found.")
@@ -361,8 +461,10 @@ Examples:
   python ebook_manager.py scan C:/Books/
   python ebook_manager.py scan C:/Books/ --ext .epub
   python ebook_manager.py import C:/Books/ --ext .epub,.pdf
+  python ebook_manager.py import C:/Books/ --onefile
+  python ebook_manager.py import C:/Books/ --ext .epub,.mobi --onefile
   python ebook_manager.py import-dir "B:/Unsorted/Books mystery/Lee Child/Bad Luck and Trouble (95)/"
-  python ebook_manager.py batch-import C:/Books/ --ext .epub
+  python ebook_manager.py batch-import C:/Books/ --ext .epub --onefile
   python ebook_manager.py test-organize
         """
     )
@@ -377,25 +479,34 @@ Examples:
     parser.add_argument('--ext', '--extensions', 
                         help='Comma-separated list of file extensions to process (e.g., .epub,.pdf)')
     
+    parser.add_argument('--onefile', action='store_true',
+                        help='Import only one file per book (highest priority format: .epub > .mobi > .azw > .azw3 > .pdf > .lrf)')
+    
     # Handle legacy mode (if no arguments provided, show help)
     if len(sys.argv) == 1:
         print("Ebook Collection Manager for Beets")
         print("\nUsage:")
-        print("  python ebook_manager.py scan <directory> [--ext .epub,.pdf]")
-        print("  python ebook_manager.py analyze <directory> [--ext .epub]")
+        print("  python ebook_manager.py scan <directory> [--ext .epub,.pdf] [--onefile]")
+        print("  python ebook_manager.py analyze <directory> [--ext .epub] [--onefile]")
         print("  python ebook_manager.py process <file>")
-        print("  python ebook_manager.py import <directory> [--ext .epub]")
-        print("  python ebook_manager.py import-dir <directory> [--ext .epub]")
-        print("  python ebook_manager.py batch-import <directory> [--ext .epub]")
+        print("  python ebook_manager.py import <directory> [--ext .epub] [--onefile]")
+        print("  python ebook_manager.py import-dir <directory> [--ext .epub] [--onefile]")
+        print("  python ebook_manager.py batch-import <directory> [--ext .epub] [--onefile]")
         print("  python ebook_manager.py test-organize")
         print("  python ebook_manager.py organize")
         print("\nOptions:")
         print("  --ext EXTENSIONS    Filter by file extensions (e.g., --ext .epub,.pdf)")
+        print("  --onefile           Import only one file per book (highest priority format)")
         print("\nExamples:")
         print("  python ebook_manager.py scan C:/Books/")
         print("  python ebook_manager.py scan C:/Books/ --ext .epub")
+        print("  python ebook_manager.py scan C:/Books/ --onefile")
         print("  python ebook_manager.py import C:/Books/ --ext .epub,.pdf")
+        print("  python ebook_manager.py import C:/Books/ --onefile")
         print("  python ebook_manager.py import-dir 'B:/Unsorted/Books mystery/Lee Child/Bad Luck and Trouble (95)/'")
+        print("  python ebook_manager.py batch-import C:/Books/ --ext .epub --onefile")
+        print("\nOne-file priority order (highest to lowest):")
+        print("  .epub > .mobi > .azw > .azw3 > .pdf > .lrf")
         return
     
     try:
@@ -405,6 +516,7 @@ Examples:
     
     # Parse extensions
     allowed_extensions = parse_extensions(args.ext)
+    onefile = getattr(args, 'onefile', False)
     
     # Execute commands
     if args.command == 'scan':
@@ -414,7 +526,7 @@ Examples:
         if not os.path.isdir(args.path):
             print(f"Directory not found: {args.path}")
             return
-        scan_collection(args.path, allowed_extensions)
+        scan_collection(args.path, allowed_extensions, onefile)
     
     elif args.command == 'analyze':
         if not args.path:
@@ -423,7 +535,7 @@ Examples:
         if not os.path.isdir(args.path):
             print(f"Directory not found: {args.path}")
             return
-        suggest_organization(args.path, allowed_extensions)
+        suggest_organization(args.path, allowed_extensions, onefile)
     
     elif args.command == 'process':
         if not args.path:
@@ -446,7 +558,7 @@ Examples:
         if not os.path.isdir(args.path):
             print(f"Directory not found: {args.path}")
             return
-        import_collection(args.path, allowed_extensions)
+        import_collection(args.path, allowed_extensions, onefile)
     
     elif args.command == 'import-dir':
         if not args.path:
@@ -455,7 +567,7 @@ Examples:
         if not os.path.isdir(args.path):
             print(f"Directory not found: {args.path}")
             return
-        import_single_directory(args.path, recursive=False, allowed_extensions=allowed_extensions)
+        import_single_directory(args.path, recursive=False, allowed_extensions=allowed_extensions, onefile=onefile)
     
     elif args.command == 'batch-import':
         if not args.path:
@@ -464,7 +576,7 @@ Examples:
         if not os.path.isdir(args.path):
             print(f"Directory not found: {args.path}")
             return
-        batch_import_ebooks(args.path, allowed_extensions)
+        batch_import_ebooks(args.path, allowed_extensions, onefile)
     
     elif args.command == 'test-organize':
         test_organization(dry_run=True)
