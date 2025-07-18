@@ -101,7 +101,10 @@ class EBooksPlugin(BeetsPlugin):
         try:
             logger.info(f"Importing ebook: {file_path}")
             
-            # Extract metadata
+            # Ensure we have an absolute path
+            file_path = os.path.abspath(file_path)
+            
+            # Extract metadata - create a fresh copy for each file
             metadata = self._extract_basic_metadata(file_path)
             
             # Enrich with external metadata
@@ -110,9 +113,11 @@ class EBooksPlugin(BeetsPlugin):
                     metadata.get('book_title', ''),
                     metadata.get('book_author', '')
                 )
+                # Create a new dict to avoid modifying cached metadata
+                metadata = dict(metadata)
                 metadata.update(external_metadata)
             
-            # Create a beets library item
+            # Create a beets library item - fresh instance for each file
             item = Item()
             
             # Map ebook metadata to beets fields
@@ -122,7 +127,7 @@ class EBooksPlugin(BeetsPlugin):
             item.album = metadata.get('book_title', item.title)
             item.albumartist = item.artist
             
-            # Set our custom ebook fields
+            # Set our custom ebook fields - ensure we're using the correct metadata
             item.book_author = metadata.get('book_author', '')
             item.book_title = metadata.get('book_title', '')
             item.isbn = metadata.get('isbn', '')
@@ -133,11 +138,16 @@ class EBooksPlugin(BeetsPlugin):
             item.file_format = metadata.get('file_format', '')
             item.ebook = True  # Flag to identify this as an ebook
             
-            # Set file path and basic properties
+            # Set file path and basic properties - ensure correct path assignment
             item.path = beets.util.bytestring_path(file_path)
             item.length = 0  # Ebooks don't have length in seconds
             item.bitrate = 0
             item.format = metadata.get('file_format', '').lower()
+            
+            # Verify the item has the correct path before adding
+            if not os.path.exists(file_path):
+                logger.error(f"File does not exist: {file_path}")
+                return None
             
             # Add to library
             lib.add(item)
@@ -147,6 +157,8 @@ class EBooksPlugin(BeetsPlugin):
             
         except Exception as e:
             logger.error(f"Error importing ebook {file_path}: {e}")
+            import traceback
+            logger.error(traceback.format_exc())
             return None
 
     def _is_ebook_file(self, filename):
@@ -199,13 +211,28 @@ class EBooksPlugin(BeetsPlugin):
         name_without_ext = os.path.splitext(filename)[0]
         
         # Try to parse filename for basic info
-        # Format: "Author - Title" or "Title - Author" or just "Title"
+        # Format could be "Author - Title" or "Title - Author"
         if ' - ' in name_without_ext:
             parts = name_without_ext.split(' - ', 1)
             if len(parts) == 2:
-                # Assume first part is author, second is title
-                metadata['book_author'] = parts[0].strip()
-                metadata['book_title'] = parts[1].strip()
+                part1, part2 = parts[0].strip(), parts[1].strip()
+                
+                # Heuristic: If part2 looks like a person's name (has capitalized words,
+                # common name patterns), assume "Title - Author" format
+                # Otherwise assume "Author - Title" format
+                author_indicators = ['Child', 'Smith', 'Brown', 'King', 'Lee', 'Martin', 'Johnson']
+                title_indicators = ['The ', 'A ', 'An ']
+                
+                if (any(indicator in part2 for indicator in author_indicators) or
+                    (len(part2.split()) <= 3 and part2.title() == part2) or
+                    any(part1.startswith(indicator) for indicator in title_indicators)):
+                    # Likely "Title - Author" format
+                    metadata['book_title'] = part1
+                    metadata['book_author'] = part2
+                else:
+                    # Assume "Author - Title" format
+                    metadata['book_author'] = part1
+                    metadata['book_title'] = part2
         else:
             metadata['book_title'] = name_without_ext.strip()
         
@@ -260,7 +287,9 @@ class EBooksPlugin(BeetsPlugin):
             # Extract ISBN
             identifier = book.get_metadata('DC', 'identifier')
             for ident in identifier:
-                if 'isbn' in ident[1].lower() if ident[1] else False:
+                # ident[1] might be None, a string, or a dict - handle safely
+                identifier_type = ident[1] if len(ident) > 1 else None
+                if identifier_type and isinstance(identifier_type, str) and 'isbn' in identifier_type.lower():
                     metadata['isbn'] = ident[0]
                     break
             
@@ -421,24 +450,24 @@ class EBooksPlugin(BeetsPlugin):
                                 item = self._import_ebook_to_library(full_path, lib)
                                 if item:
                                     imported_count += 1
-                                    print(f"✅ Imported: {item.artist} - {item.title}")
+                                    print(f"[OK] Imported: {item.artist} - {item.title}")
                 elif os.path.isfile(path) and self._is_ebook_file(path):
                     # Process single file
                     item = self._import_ebook_to_library(path, lib)
                     if item:
                         imported_count += 1
-                        print(f"✅ Imported: {item.artist} - {item.title}")
+                        print(f"[OK] Imported: {item.artist} - {item.title}")
                 else:
-                    print(f"❌ Skipping non-ebook: {path}")
+                    print(f"[ERROR] Skipping non-ebook: {path}")
             
             if imported_count > 0:
-                print(f"\n🎉 Successfully imported {imported_count} ebook(s) to your beets library!")
+                print(f"\n[SUCCESS] Successfully imported {imported_count} ebook(s) to your beets library!")
                 print("You can now use:")
                 print("  beet ls ebook:true")
                 print("  beet ls book_author:tolkien")
                 print("  beet ls book_title:'lord of the rings'")
             else:
-                print("❌ No ebooks were imported.")
+                print("[ERROR] No ebooks were imported.")
         
         # Create commands
         try:
