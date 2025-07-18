@@ -1,9 +1,12 @@
 #!/usr/bin/env python3
 """
-Example script demonstrating basic ebook metadata extraction.
+Example script demonstrating basic plugin functionality.
 
-This script shows how the beets-ebooks plugin would work without requiring
+This script shows how the beets-ebooks plugin works without requiring
 a full beets installation. It's useful for testing and development.
+
+For production usage, the ebook-manager utility provides a more complete
+CLI interface: https://github.com/OttScott/ebook-manager
 """
 
 import os
