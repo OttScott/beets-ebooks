@@ -2,15 +2,35 @@ import os
 import json
 import logging
 
+# Set up logging
+logger = logging.getLogger('beets.ebooks')
+
 try:
     from beets.plugins import BeetsPlugin
     from beets import library
     from beets.dbcore import types
     from beets.importer import ImportTask
     import beets.ui
+    BEETS_AVAILABLE = True
 except ImportError:
     # Beets not installed - this is expected during development
-    pass
+    BEETS_AVAILABLE = False
+    
+    # Create mock classes for development
+    class BeetsPlugin:
+        item_types = {}
+        def __init__(self):
+            self.config = MockConfig()
+        def register_listener(self, event, func):
+            pass
+    
+    class MockConfig:
+        def add(self, config_dict):
+            self._config = config_dict
+        def get(self):
+            return []
+        def keys(self):
+            return self._config.keys() if hasattr(self, '_config') else []
 
 try:
     import requests
@@ -24,34 +44,19 @@ except ImportError:
     ebooklib = None
     epub = None
 
-# Set up logging
-logger = logging.getLogger('beets.ebooks')
-
-
-class EbookImportTask(ImportTask):
-    """Custom import task for ebook files."""
-    
-    def __init__(self, paths, session):
-        super().__init__(paths, session)
-        self.is_ebook = True
-        
-    def lookup_candidates(self):
-        """Override to provide ebook-specific lookup logic."""
-        return []
-
 
 class EBooksPlugin(BeetsPlugin):
     """Beets plugin for managing ebook collections."""
     
     item_types = {
-        'book_author': types.String(),
-        'book_title': types.String(),
-        'isbn': types.String(),
-        'published_year': types.Integer(),
-        'publisher': types.String(),
-        'page_count': types.Integer(),
-        'language': types.String(),
-        'file_format': types.String(),
+        'book_author': types.String() if BEETS_AVAILABLE else str,
+        'book_title': types.String() if BEETS_AVAILABLE else str,
+        'isbn': types.String() if BEETS_AVAILABLE else str,
+        'published_year': types.Integer() if BEETS_AVAILABLE else int,
+        'publisher': types.String() if BEETS_AVAILABLE else str,
+        'page_count': types.Integer() if BEETS_AVAILABLE else int,
+        'language': types.String() if BEETS_AVAILABLE else str,
+        'file_format': types.String() if BEETS_AVAILABLE else str,
     }
 
     def __init__(self):
@@ -63,38 +68,20 @@ class EBooksPlugin(BeetsPlugin):
             'metadata_sources': ['google_books', 'open_library'],
         })
 
-        # Patch Beets' task discovery to include ebooks
-        self._patch_read_tasks()
-
-        # Hook for metadata enrichment
-        self.register_listener('import_task_start', self.import_hook)
-
-    def _patch_read_tasks(self):
-        """Monkey-patch beets.importer.stages.read_tasks to add ebooks."""
-        import beets.importer.stages as stages
-
-        original_read_tasks = stages.read_tasks
-
-        def custom_read_tasks(session, paths):
-            # Yield all normal tasks first
-            for task in original_read_tasks(session, paths):
-                yield task
-
-            # Add ebook tasks
-            for path in paths:
-                for root, _, files in os.walk(path):
-                    for file in files:
-                        if self._is_ebook_file(file):
-                            full_path = os.path.join(root, file)
-                            logger.info(f"Found ebook: {full_path}")
-                            yield EbookImportTask([full_path], session)
-
-        stages.read_tasks = custom_read_tasks
+        # Register import hooks
+        self.register_listener('import_task_created', self.import_stage)
 
     def _is_ebook_file(self, filename):
         """Check if a file is an ebook based on its extension."""
-        extensions = self.config['ebook_extensions'].get()
-        return any(filename.lower().endswith(ext) for ext in extensions)
+        try:
+            extensions = self.config['ebook_extensions'].get()
+            if extensions is None:
+                extensions = ['.epub', '.pdf', '.mobi', '.lrf', '.azw', '.azw3']
+            return any(filename.lower().endswith(ext) for ext in extensions)
+        except:
+            # Fallback for development mode
+            default_extensions = ['.epub', '.pdf', '.mobi', '.lrf', '.azw', '.azw3']
+            return any(filename.lower().endswith(ext) for ext in default_extensions)
 
     def import_hook(self, session, task):
         """Hook called when an import task starts."""
@@ -343,3 +330,52 @@ class EBooksPlugin(BeetsPlugin):
         except ImportError:
             # beets.ui not available (development mode)
             return []
+
+    def album_distance(self, items, album_info, mapping):
+        """Return a distance for ebooks (always a high distance to prefer manual import)."""
+        return 1.0
+
+    def track_distance(self, item, track_info):
+        """Return a distance for individual ebooks."""
+        return 1.0
+
+    def import_stage(self, session, task):
+        """Handle ebook import during beets import process."""
+        # Check if any of the paths contain ebooks
+        ebook_paths = []
+        if hasattr(task, 'paths'):
+            for path in task.paths:
+                if os.path.isdir(path):
+                    for root, _, files in os.walk(path):
+                        for file in files:
+                            if self._is_ebook_file(file):
+                                ebook_paths.append(os.path.join(root, file))
+                elif os.path.isfile(path) and self._is_ebook_file(path):
+                    ebook_paths.append(path)
+        
+        if ebook_paths:
+            logger.info(f"Found {len(ebook_paths)} ebook(s) during import")
+            for ebook_path in ebook_paths:
+                self._process_ebook_import(ebook_path, session)
+
+    def _process_ebook_import(self, file_path, session):
+        """Process a single ebook file for import."""
+        try:
+            logger.info(f"Processing ebook: {file_path}")
+            metadata = self._extract_basic_metadata(file_path)
+            
+            # Try to get additional metadata from external sources
+            if metadata.get('book_title') or metadata.get('book_author'):
+                external_metadata = self._fetch_external_metadata(
+                    metadata.get('book_title', ''),
+                    metadata.get('book_author', '')
+                )
+                metadata.update(external_metadata)
+            
+            # For now, just log what would be imported
+            logger.info(f"Would import ebook with metadata: {metadata}")
+            
+            # You could extend this to actually create library items here
+            
+        except Exception as e:
+            logger.error(f"Error processing ebook {file_path}: {e}")

@@ -75,44 +75,49 @@ To get enhanced metadata from Google Books:
 
 ## Usage
 
-### Import Ebooks
-
-Import ebooks just like you would music files:
-
-```bash
-beet import /path/to/ebooks
-```
-
-The plugin will automatically detect ebook files and process them alongside any music files.
-
 ### Process Individual Ebooks
 
-Use the `ebook` command to process specific ebook files:
+The primary way to use this plugin is with the `ebook` command to process specific ebook files:
 
 ```bash
 beet ebook /path/to/book.epub
 beet ebook /path/to/ebooks/
 ```
 
-This will extract and display metadata for the specified ebook(s).
+This will extract and display metadata for the specified ebook(s), including:
+- Basic metadata from filename parsing
+- EPUB metadata extraction (for .epub files)
+- Enhanced metadata from Google Books API
 
-### Query Ebook Fields
-
-Use Beets' query system with ebook-specific fields:
+### Example Output
 
 ```bash
-# Find books by author
-beet list book_author:tolkien
-
-# Find books published in a specific year
-beet list published_year:2023
-
-# Find books in a specific format
-beet list file_format:epub
-
-# Find books with ISBN
-beet list isbn::
+$ beet ebook "J.R.R. Tolkien - The Lord of the Rings.epub"
+Processing ebook: J.R.R. Tolkien - The Lord of the Rings.epub
+Extracted metadata:
+  file_format: EPUB
+  path: /path/to/book.epub
+  book_author: J.R.R. Tolkien
+  book_title: The Lord of the Rings
+Fetching external metadata...
+External metadata:
+  published_year: 2001
+  publisher: Mariner Books
+  page_count: 1176
+  language: en
 ```
+
+### Batch Processing
+
+Process all ebooks in a directory:
+
+```bash
+beet ebook /path/to/ebook/collection/
+```
+
+### Integration with Beets Import
+
+Currently, this plugin works alongside beets but doesn't integrate directly with the `beet import` command, as beets is primarily designed for music files. The plugin provides a separate `ebook` command for ebook management.
 
 ## Ebook Fields
 
