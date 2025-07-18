@@ -168,7 +168,7 @@ class EBooksPlugin(BeetsPlugin):
             if extensions is None:
                 extensions = ['.epub', '.pdf', '.mobi', '.lrf', '.azw', '.azw3']
             return any(filename.lower().endswith(ext) for ext in extensions)
-        except:
+        except Exception:
             # Fallback for development mode
             default_extensions = ['.epub', '.pdf', '.mobi', '.lrf', '.azw', '.azw3']
             return any(filename.lower().endswith(ext) for ext in default_extensions)

@@ -1,0 +1,33 @@
+[flake8]
+max-line-length = 120
+max-complexity = 25
+ignore = 
+    # E203: whitespace before ':' (conflicts with black)
+    E203,
+    # W503: line break before binary operator (conflicts with black) 
+    W503,
+    # W504: line break after binary operator
+    W504,
+    # W293: blank line contains whitespace
+    W293,
+    # W291: trailing whitespace  
+    W291,
+    # E301/E302: expected blank lines (too strict for plugin dev)
+    E301,E302,E305,
+    # F401: imported but unused (common in plugin development)
+    F401,
+    # F541: f-string missing placeholders (sometimes used for consistency)
+    F541
+exclude = 
+    .git,
+    __pycache__,
+    build,
+    dist,
+    *.egg-info,
+    .venv,
+    venv
+per-file-ignores =
+    # Tests can have longer lines and unused imports
+    tests/*:E501,F401,F811,C901
+    # Plugin may have unused imports due to optional dependencies  
+    beetsplug/ebooks.py:F401,C901

@@ -262,22 +262,22 @@ def suggest_organization(directory, allowed_extensions=None):
         ext = os.path.splitext(filename)[1].lower()
         formats[ext] = formats.get(ext, 0) + 1
     
-    print(f"\nCollection Statistics:")
+    print("\nCollection Statistics:")
     print(f"  Total ebooks: {len(ebooks)}")
     print(f"  Unique authors: {len(authors)}")
     print(f"  File formats: {dict(formats)}")
     
     if authors:
-        print(f"\nAuthors found:")
+        print("\nAuthors found:")
         for author in sorted(authors):
             print(f"  - {author}")
     
     print(f"\nSuggested organization structure:")
     print(f"  📁 {directory}/")
-    print(f"    📁 Author Name/")
-    print(f"      📄 Book Title.epub")
-    print(f"    📁 Another Author/")
-    print(f"      📄 Another Book.pdf")
+    print("    📁 Author Name/")
+    print("      📄 Book Title.epub")
+    print("    📁 Another Author/")
+    print("      📄 Another Book.pdf")
 
 def import_single_directory(directory, recursive=False, allowed_extensions=None):
     """Import ebooks from a single directory (non-recursive by default)."""
