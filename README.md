@@ -9,6 +9,7 @@ A [Beets](https://beets.io/) plugin for managing ebook collections alongside you
 - **External Metadata Sources**: Enriches metadata using Google Books API and other sources
 - **Seamless Integration**: Works with existing Beets workflows and commands
 - **Custom Fields**: Adds ebook-specific fields like author, ISBN, publisher, page count, etc.
+- **File Type Filtering**: Import only specific ebook formats using the `--ext` option
 
 ## Installation
 
@@ -118,6 +119,16 @@ beet ebook /path/to/ebook/collection/
 ### Integration with Beets Import
 
 Currently, this plugin works alongside beets but doesn't integrate directly with the `beet import` command, as beets is primarily designed for music files. The plugin provides a separate `ebook` command for ebook management.
+
+### File Type Filtering
+
+To import only specific ebook formats, use the `--ext` option with the `beet ebook` command:
+
+```bash
+beet ebook --ext epub,mobi /path/to/ebooks/
+```
+
+This will process only the files with the specified extensions.
 
 ## Ebook Fields
 

@@ -28,12 +28,33 @@ Use the provided `ebook_manager.py` script:
 # Analyze your collection structure
 python ebook_manager.py analyze "C:/Books/"
 
+# Analyze only EPUB files
+python ebook_manager.py analyze "C:/Books/" --ext .epub
+
 # Process all ebooks in a directory
 python ebook_manager.py scan "C:/Books/"
 
+# Process only specific file types
+python ebook_manager.py scan "C:/Books/" --ext .epub,.pdf
+
 # Process a single file
 python ebook_manager.py process "book.epub"
+
+# Import ebooks to beets library with filtering
+python ebook_manager.py import "C:/Books/" --ext .epub
+python ebook_manager.py batch-import "C:/Books/" --ext .epub,.mobi
 ```
+
+#### File Type Filtering
+
+You can filter by specific ebook formats using the `--ext` option:
+
+- **Single format:** `--ext .epub`
+- **Multiple formats:** `--ext .epub,.pdf,.mobi`
+- **Case insensitive:** `--ext .EPUB,.PDF` (automatically normalized)
+- **Without dots:** `--ext epub,pdf` (dots added automatically)
+
+**Supported formats:** `.epub`, `.pdf`, `.mobi`, `.lrf`, `.azw`, `.azw3`
 
 ## 📁 Your Current Configuration
 
