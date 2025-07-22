@@ -60,6 +60,11 @@ class EBooksPlugin(BeetsPlugin):
         'language': types.String() if BEETS_AVAILABLE else str,
         'file_format': types.String() if BEETS_AVAILABLE else str,
         'ebook': types.Boolean() if BEETS_AVAILABLE else bool,  # Flag to identify ebooks
+        # Comic-specific fields
+        'series': types.String() if BEETS_AVAILABLE else str,
+        'issue_number': types.Integer() if BEETS_AVAILABLE else int,
+        'genre': types.String() if BEETS_AVAILABLE else str,
+        'summary': types.String() if BEETS_AVAILABLE else str,
     }
 
     def __init__(self):
@@ -67,7 +72,7 @@ class EBooksPlugin(BeetsPlugin):
         self.config.add({
             'google_api_key': '',
             'download_covers': True,
-            'ebook_extensions': ['.epub', '.pdf', '.mobi', '.lrf', '.azw', '.azw3'],
+            'ebook_extensions': ['.epub', '.pdf', '.mobi', '.lrf', '.azw', '.azw3', '.cbr', '.cbz'],
             'metadata_sources': ['google_books', 'open_library'],
             'auto_import': True,  # Automatically import ebooks during beet import
         })
@@ -138,6 +143,12 @@ class EBooksPlugin(BeetsPlugin):
             item.file_format = metadata.get('file_format', '')
             item.ebook = True  # Flag to identify this as an ebook
             
+            # Set comic-specific fields if available
+            item.series = metadata.get('series', '')
+            item.issue_number = metadata.get('issue_number', 0)
+            item.genre = metadata.get('genre', '')
+            item.summary = metadata.get('summary', '')
+            
             # Set file path and basic properties - ensure correct path assignment
             item.path = beets.util.bytestring_path(file_path)
             item.length = 0  # Ebooks don't have length in seconds
@@ -166,11 +177,11 @@ class EBooksPlugin(BeetsPlugin):
         try:
             extensions = self.config['ebook_extensions'].get()
             if extensions is None:
-                extensions = ['.epub', '.pdf', '.mobi', '.lrf', '.azw', '.azw3']
+                extensions = ['.epub', '.pdf', '.mobi', '.lrf', '.azw', '.azw3', '.cbr', '.cbz']
             return any(filename.lower().endswith(ext) for ext in extensions)
         except Exception:
             # Fallback for development mode
-            default_extensions = ['.epub', '.pdf', '.mobi', '.lrf', '.azw', '.azw3']
+            default_extensions = ['.epub', '.pdf', '.mobi', '.lrf', '.azw', '.azw3', '.cbr', '.cbz']
             return any(filename.lower().endswith(ext) for ext in default_extensions)
 
     def import_hook(self, session, task):
@@ -211,8 +222,11 @@ class EBooksPlugin(BeetsPlugin):
         name_without_ext = os.path.splitext(filename)[0]
         
         # Try to parse filename for basic info
-        # Format could be "Author - Title" or "Title - Author"
-        if ' - ' in name_without_ext:
+        # Handle comic book naming conventions (e.g., "Batman - Detective Comics 001")
+        if file_path.lower().endswith(('.cbr', '.cbz')):
+            metadata.update(self._parse_comic_filename(name_without_ext))
+        elif ' - ' in name_without_ext:
+            # Standard ebook format: "Author - Title" or "Title - Author"
             parts = name_without_ext.split(' - ', 1)
             if len(parts) == 2:
                 part1, part2 = parts[0].strip(), parts[1].strip()
@@ -236,13 +250,54 @@ class EBooksPlugin(BeetsPlugin):
         else:
             metadata['book_title'] = name_without_ext.strip()
         
-        # Try to extract from EPUB metadata if it's an EPUB file
+        # Try to extract format-specific metadata
         if file_path.lower().endswith('.epub'):
             try:
                 epub_metadata = self._extract_epub_metadata(file_path)
                 metadata.update(epub_metadata)
             except Exception as e:
                 logger.warning(f"Could not extract EPUB metadata from {file_path}: {e}")
+        elif file_path.lower().endswith(('.cbr', '.cbz')):
+            try:
+                comic_metadata = self._extract_comic_metadata(file_path)
+                metadata.update(comic_metadata)
+            except Exception as e:
+                logger.warning(f"Could not extract comic metadata from {file_path}: {e}")
+        
+        return metadata
+
+    def _parse_comic_filename(self, name_without_ext):
+        """Parse comic book filename for series, title, and issue information."""
+        metadata = {}
+        
+        # Common comic naming patterns:
+        # "Batman - Detective Comics 001"
+        # "Spider-Man - Amazing Spider-Man 15"
+        # "X-Men - Uncanny X-Men 001"
+        
+        if ' - ' in name_without_ext:
+            parts = name_without_ext.split(' - ', 1)
+            if len(parts) == 2:
+                series_part, title_issue_part = parts[0].strip(), parts[1].strip()
+                
+                # Try to extract issue number from the end
+                import re
+                issue_match = re.search(r'(\d+)$', title_issue_part)
+                if issue_match:
+                    issue_number = int(issue_match.group(1))
+                    title_part = title_issue_part[:issue_match.start()].strip()
+                    
+                    metadata['series'] = series_part
+                    metadata['book_title'] = title_part if title_part else series_part
+                    metadata['issue_number'] = issue_number
+                    metadata['book_author'] = f"{series_part} #{issue_number:03d}"
+                else:
+                    # No issue number found, treat normally
+                    metadata['series'] = series_part
+                    metadata['book_title'] = title_issue_part
+                    metadata['book_author'] = series_part
+        else:
+            metadata['book_title'] = name_without_ext
         
         return metadata
 
@@ -300,6 +355,119 @@ class EBooksPlugin(BeetsPlugin):
             return {}
         except Exception as e:
             logger.error(f"Error extracting EPUB metadata: {e}")
+            return {}
+
+    def _extract_comic_metadata(self, file_path):
+        """Extract metadata from CBR/CBZ comic files."""
+        try:
+            import zipfile
+        except ImportError:
+            logger.warning("zipfile not available, cannot extract comic metadata")
+            return {}
+            
+        # Try to import rarfile for CBR support, but don't fail if it's not available
+        try:
+            import rarfile
+            RARFILE_AVAILABLE = True
+        except ImportError:
+            RARFILE_AVAILABLE = False
+            
+        metadata = {}
+        is_cbz = file_path.lower().endswith('.cbz')
+        is_cbr = file_path.lower().endswith('.cbr')
+        
+        # Basic comic detection - count image files
+        image_extensions = ('.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp')
+        page_count = 0
+        
+        if is_cbz:
+            try:
+                with zipfile.ZipFile(file_path, 'r') as comic_zip:
+                    # Count image files
+                    for name in comic_zip.namelist():
+                        if name.lower().endswith(image_extensions) and not name.startswith('__MACOSX/'):
+                            page_count += 1
+                    
+                    # Look for ComicInfo.xml metadata
+                    try:
+                        comic_info = comic_zip.read('ComicInfo.xml')
+                        comic_metadata = self._parse_comic_info_xml(comic_info)
+                        metadata.update(comic_metadata)
+                    except KeyError:
+                        # No ComicInfo.xml found
+                        pass
+            except Exception as e:
+                logger.warning(f"Error reading CBZ file {file_path}: {e}")
+                
+        elif is_cbr and RARFILE_AVAILABLE:
+            try:
+                with rarfile.RarFile(file_path, 'r') as comic_rar:
+                    # Count image files
+                    for info in comic_rar.infolist():
+                        if info.filename.lower().endswith(image_extensions):
+                            page_count += 1
+                    
+                    # Look for ComicInfo.xml metadata
+                    try:
+                        comic_info = comic_rar.read('ComicInfo.xml')
+                        comic_metadata = self._parse_comic_info_xml(comic_info)
+                        metadata.update(comic_metadata)
+                    except Exception:
+                        # No ComicInfo.xml found or error reading
+                        pass
+            except Exception as e:
+                logger.warning(f"Error reading CBR file {file_path}: {e}")
+        elif is_cbr and not RARFILE_AVAILABLE:
+            logger.warning("rarfile not available, cannot extract CBR metadata")
+            
+        if page_count > 0:
+            metadata['page_count'] = page_count
+            
+        # Set format-specific metadata
+        metadata['file_format'] = 'CBZ' if is_cbz else 'CBR'
+        
+        return metadata
+
+    def _parse_comic_info_xml(self, xml_content):
+        """Parse ComicInfo.xml metadata from comic files."""
+        try:
+            import xml.etree.ElementTree as ET
+            
+            metadata = {}
+            root = ET.fromstring(xml_content)
+            
+            # Extract common comic metadata fields
+            field_mapping = {
+                'Title': 'book_title',
+                'Writer': 'book_author',
+                'Series': 'series',
+                'Number': 'issue_number',
+                'Year': 'published_year',
+                'Publisher': 'publisher',
+                'PageCount': 'page_count',
+                'Summary': 'summary',
+                'Genre': 'genre',
+                'LanguageISO': 'language',
+            }
+            
+            for xml_field, metadata_field in field_mapping.items():
+                element = root.find(xml_field)
+                if element is not None and element.text:
+                    value = element.text.strip()
+                    
+                    # Convert numeric fields
+                    if metadata_field in ['published_year', 'page_count', 'issue_number']:
+                        try:
+                            value = int(value)
+                        except ValueError:
+                            continue
+                    
+                    metadata[metadata_field] = value
+            
+            return metadata
+            
+        except Exception as e:
+            logger.warning(f"Error parsing ComicInfo.xml: {e}")
             return {}
 
     def _fetch_external_metadata(self, title, author):

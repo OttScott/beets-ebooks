@@ -50,6 +50,8 @@ class TestEBooksPlugin(unittest.TestCase):
             ('document.pdf', True),
             ('story.mobi', True),
             ('novel.azw', True),
+            ('comic.cbr', True),
+            ('comic.cbz', True),
             ('music.mp3', False),
             ('image.jpg', False),
             ('text.txt', False),
@@ -75,6 +77,8 @@ class TestEBooksPlugin(unittest.TestCase):
             ('novel.azw', 'AZW'),
             ('file.azw3', 'AZW3'),
             ('book.lrf', 'LRF'),
+            ('comic.cbr', 'CBR'),
+            ('comic.cbz', 'CBZ'),
         ]
         
         for filename, expected_format in test_cases:
@@ -89,6 +93,16 @@ class TestEBooksPlugin(unittest.TestCase):
                 finally:
                     if os.path.exists(tmp_path):
                         os.unlink(tmp_path)
+
+    def test_comic_metadata_extraction(self):
+        """Test comic book metadata extraction."""
+        # Test CBZ file detection
+        cbz_metadata = self.plugin._extract_basic_metadata('test.cbz')
+        self.assertEqual(cbz_metadata['file_format'], 'CBZ')
+        
+        # Test CBR file detection
+        cbr_metadata = self.plugin._extract_basic_metadata('test.cbr')
+        self.assertEqual(cbr_metadata['file_format'], 'CBR')
     
     def test_ebook_file_extensions(self):
         """Test that all expected ebook extensions are supported."""

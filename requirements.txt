@@ -1,3 +1,4 @@
 beets>=1.6.0
 requests>=2.25.0
 ebooklib>=0.18
+rarfile>=4.0
