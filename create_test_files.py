@@ -53,7 +53,12 @@ def create_epub_file(filename, metadata):
     <dc:language>{metadata.get('language', 'en')}</dc:language>
     <dc:publisher>{metadata.get('publisher', 'Test Publisher')}</dc:publisher>
     <dc:date>{metadata.get('date', '2024-01-01')}</dc:date>
-    <dc:description>{metadata.get('description', 'A test ebook for beets-ebooks plugin testing.')}</dc:description>
+    <dc:description>
+        {metadata.get(
+            'description',
+            'A test ebook for beets-ebooks plugin testing.'
+        )}
+    </dc:description>
   </metadata>
   <manifest>
     <item id="chapter1" href="chapter1.xhtml" media-type="application/xhtml+xml"/>
@@ -75,8 +80,15 @@ def create_epub_file(filename, metadata):
 <body>
     <h1>{metadata['title']}</h1>
     <p>By {metadata['author']}</p>
-    <p>{metadata.get('description', 'This is a test ebook created for testing the beets-ebooks plugin.')}</p>
-    <p>This EPUB file contains proper metadata that can be extracted by the plugin.</p>
+    <p>
+        {metadata.get(
+            'description',
+            'This is a test ebook created for testing the beets-ebooks plugin.'
+        )}
+    </p>
+    <p>
+        Metadata extracted by the plugin.
+    </p>
 </body>
 </html>"""
         epub.writestr("OEBPS/chapter1.xhtml", chapter_content.encode("utf-8"))
@@ -285,7 +297,9 @@ def main():
     print("  python -m pytest tests/ -v")
     print("\nTo test with real files:")
     print(
-        "  python -c \"from beetsplug.ebooks import EBooksPlugin; p = EBooksPlugin(); print('EPUB detected:', p._is_ebook_file('test_ebooks/J.R.R. Tolkien - The Lord of the Rings.epub'))\""
+        "  python -c \"from beetsplug.ebooks import EBooksPlugin; "
+        "p = EBooksPlugin(); print('EPUB detected:', "
+        "p._is_ebook_file('test_ebooks/J.R.R. Tolkien - The Lord of the Rings.epub'))\""
     )
 
     # Show what was created
