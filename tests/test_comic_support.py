@@ -89,9 +89,7 @@ class TestComicSupport(unittest.TestCase):
 
         for filename, expected_metadata in test_cases:
             with self.subTest(filename=filename):
-                metadata = self.plugin._parse_comic_filename(
-                    os.path.splitext(filename)[0]
-                )
+                metadata = self.plugin._parse_comic_filename(os.path.splitext(filename)[0])
                 for key, expected_value in expected_metadata.items():
                     self.assertEqual(
                         metadata.get(key),

@@ -115,7 +115,7 @@ class TestEBooksPlugin(unittest.TestCase):
                 {"book_author": "J.R.R. Tolkien", "book_title": "The Lord of the Rings"},
             ),
             (
-                "Agatha Christie - Murder on the Orient Express", 
+                "Agatha Christie - Murder on the Orient Express",
                 {"book_author": "Agatha Christie", "book_title": "Murder on the Orient Express"},
             ),
             (
@@ -131,30 +131,27 @@ class TestEBooksPlugin(unittest.TestCase):
         for name_without_ext, expected_metadata in test_cases:
             with self.subTest(filename=name_without_ext):
                 # Create mock metadata that includes filename parsing results
-                mock_metadata = {
-                    'file_format': 'EPUB',
-                    'path': f'{name_without_ext}.epub'
-                }
-                
+                mock_metadata = {"file_format": "EPUB", "path": f"{name_without_ext}.epub"}
+
                 # Test the core filename parsing logic
-                if ' - ' in name_without_ext:
-                    parts = name_without_ext.split(' - ', 1)
+                if " - " in name_without_ext:
+                    parts = name_without_ext.split(" - ", 1)
                     if len(parts) == 2:
                         part1, part2 = parts[0].strip(), parts[1].strip()
-                        
+
                         # Heuristic: Check if it looks like "Title - Author" vs "Author - Title"
-                        title_indicators = ['The ', 'A ', 'An ']
+                        title_indicators = ["The ", "A ", "An "]
                         if any(part1.startswith(indicator) for indicator in title_indicators):
                             # Likely "Title - Author" format
-                            mock_metadata['book_title'] = part1
-                            mock_metadata['book_author'] = part2
+                            mock_metadata["book_title"] = part1
+                            mock_metadata["book_author"] = part2
                         else:
-                            # Assume "Author - Title" format  
-                            mock_metadata['book_author'] = part1
-                            mock_metadata['book_title'] = part2
+                            # Assume "Author - Title" format
+                            mock_metadata["book_author"] = part1
+                            mock_metadata["book_title"] = part2
                 else:
-                    mock_metadata['book_title'] = name_without_ext.strip()
-                
+                    mock_metadata["book_title"] = name_without_ext.strip()
+
                 # Verify the parsing results
                 for key, expected_value in expected_metadata.items():
                     self.assertEqual(
@@ -165,16 +162,7 @@ class TestEBooksPlugin(unittest.TestCase):
 
     def test_supported_extensions_comprehensive(self):
         """Test that all expected ebook extensions are supported."""
-        supported_extensions = [
-            ".epub",
-            ".pdf", 
-            ".mobi", 
-            ".azw", 
-            ".azw3", 
-            ".lrf",
-            ".cbr",
-            ".cbz"
-        ]
+        supported_extensions = [".epub", ".pdf", ".mobi", ".azw", ".azw3", ".lrf", ".cbr", ".cbz"]
 
         for ext in supported_extensions:
             with self.subTest(extension=ext):
@@ -187,11 +175,23 @@ class TestEBooksPlugin(unittest.TestCase):
     def test_non_ebook_extensions(self):
         """Test that non-ebook extensions are not detected as ebooks."""
         non_ebook_extensions = [
-            ".mp3", ".flac", ".wav", ".m4a",  # Audio
-            ".jpg", ".png", ".gif", ".bmp",   # Images
-            ".txt", ".doc", ".docx",          # Documents
-            ".mp4", ".avi", ".mkv",           # Video
-            ".zip", ".rar", ".7z",            # Archives
+            ".mp3",
+            ".flac",
+            ".wav",
+            ".m4a",  # Audio
+            ".jpg",
+            ".png",
+            ".gif",
+            ".bmp",  # Images
+            ".txt",
+            ".doc",
+            ".docx",  # Documents
+            ".mp4",
+            ".avi",
+            ".mkv",  # Video
+            ".zip",
+            ".rar",
+            ".7z",  # Archives
         ]
 
         for ext in non_ebook_extensions:
@@ -206,7 +206,7 @@ class TestEBooksPlugin(unittest.TestCase):
         """Test extension filtering functionality for CLI tools."""
         test_files = [
             "book1.epub",
-            "book2.pdf", 
+            "book2.pdf",
             "book3.mobi",
             "book4.azw",
             "comic1.cbz",

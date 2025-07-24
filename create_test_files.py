@@ -297,7 +297,7 @@ def main():
     print("  python -m pytest tests/ -v")
     print("\nTo test with real files:")
     print(
-        "  python -c \"from beetsplug.ebooks import EBooksPlugin; "
+        '  python -c "from beetsplug.ebooks import EBooksPlugin; '
         "p = EBooksPlugin(); print('EPUB detected:', "
         "p._is_ebook_file('test_ebooks/J.R.R. Tolkien - The Lord of the Rings.epub'))\""
     )
