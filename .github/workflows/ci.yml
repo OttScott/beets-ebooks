@@ -89,7 +89,7 @@ jobs:
         # Stop the build if there are Python syntax errors or undefined names
         flake8 beetsplug/ tests/ examples/ *.py --count --select=E9,F63,F7,F82 --show-source --statistics
         # Check all other issues
-        flake8 beetsplug/ tests/ examples/ setup.py create_test_comics.py test_comic_support.py test_comic_info.py --count --max-line-length=100 --statistics
+        flake8 beetsplug/ tests/ examples/ setup.py create_test_comics.py --count --max-line-length=100 --statistics
     
     - name: Check code formatting with black
       run: |
