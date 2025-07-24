@@ -657,7 +657,8 @@ class EBooksPlugin(BeetsPlugin):
 
             if imported_count > 0:
                 print(
-                    f"\n[SUCCESS] Successfully imported {imported_count} ebook(s) to your beets library!"
+                    f"\n[SUCCESS] Successfully imported {imported_count} ebook(s) "
+                    f"to your beets library!"
                 )
                 print("You can now use:")
                 print("  beet ls ebook:true")

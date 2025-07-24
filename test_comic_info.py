@@ -30,7 +30,8 @@ def test_comic_info_xml_extraction():
             cbz.writestr("page03.jpg", b"fake image data")
 
             # Add ComicInfo.xml with comprehensive metadata
-            comic_info = """<?xml version="1.0"?>
+            comic_info = (
+                """<?xml version="1.0"?>
 <ComicInfo>
     <Title>Amazing Spider-Man</Title>
     <Series>Spider-Man</Series>
@@ -40,10 +41,11 @@ def test_comic_info_xml_extraction():
     <Year>1963</Year>
     <PageCount>3</PageCount>
     <Genre>Superhero</Genre>
-    <Summary>The origin story of Spider-Man, featuring Peter Parker's transformation """ \
-        """into the amazing wall-crawler.</Summary>
+    <Summary>The origin story of Spider-Man, featuring Peter Parker's transformation """
+                """into the amazing wall-crawler.</Summary>
     <LanguageISO>en</LanguageISO>
 </ComicInfo>"""
+            )
             cbz.writestr("ComicInfo.xml", comic_info.encode("utf-8"))
 
         print(f"Testing CBZ with ComicInfo.xml: {temp_path}")
