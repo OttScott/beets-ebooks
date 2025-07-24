@@ -167,12 +167,19 @@ cython_debug/
 
 # Test files and data
 test_data/
+test_ebooks/
+
+# Ebook and comic files (generated during testing)
 *.epub
 *.pdf
 *.mobi
 *.azw
 *.azw3
 *.lrf
+*.cbr
+*.cbz
+*.cb7
+*.cbt
 
 # Beets config for testing
 config.yaml
