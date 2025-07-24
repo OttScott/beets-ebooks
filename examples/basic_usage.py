@@ -9,24 +9,24 @@ For production usage, the ebook-manager utility provides a more complete
 CLI interface: https://github.com/OttScott/ebook-manager
 """
 
+import json
 import os
 import sys
-import json
+from unittest.mock import MagicMock
 
 # Add the parent directory to the path so we can import the plugin
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
 # Mock beets modules for this example
-from unittest.mock import MagicMock
-sys.modules['beets.plugins'] = MagicMock()
-sys.modules['beets'] = MagicMock()
-sys.modules['beets.library'] = MagicMock()
-sys.modules['beets.dbcore'] = MagicMock()
-sys.modules['beets.dbcore.types'] = MagicMock()
-sys.modules['beets.importer'] = MagicMock()
-sys.modules['beets.ui'] = MagicMock()
+sys.modules["beets.plugins"] = MagicMock()
+sys.modules["beets"] = MagicMock()
+sys.modules["beets.library"] = MagicMock()
+sys.modules["beets.dbcore"] = MagicMock()
+sys.modules["beets.dbcore.types"] = MagicMock()
+sys.modules["beets.importer"] = MagicMock()
+sys.modules["beets.ui"] = MagicMock()
 
-from beetsplug.ebooks import EBooksPlugin
+from beetsplug.ebooks import EBooksPlugin  # noqa: E402
 
 
 def create_test_ebook(filename):
