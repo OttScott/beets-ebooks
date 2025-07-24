@@ -1,4 +1,4 @@
-from setuptools import setup, find_packages
+from setuptools import find_packages, setup
 
 with open("README.md", "r", encoding="utf-8") as fh:
     long_description = fh.read()
@@ -30,8 +30,16 @@ setup(
         "beets>=1.6.0",
         "requests>=2.25.0",
         "ebooklib>=0.18",
-        "PyPDF2>=3.0.0",
     ],
+    extras_require={
+        "pdf": ["PyPDF2>=3.0.0"],
+        "dev": [
+            "pytest>=6.0",
+            "pytest-cov",
+            "flake8",
+            "black",
+        ],
+    },
     entry_points={
         "beets.plugins": [
             "ebooks = beetsplug.ebooks:EBooksPlugin",

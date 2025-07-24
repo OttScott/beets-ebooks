@@ -1,199 +1,219 @@
-# Beets Ebooks Plugin
+# Beets EBooks Plugin
 
-A [Beets](https://beets.io/) plugin for managing ebook collections alongside your music library.
+A plugin for the [Beets](https://beets.io/) music library manager that extends its functionality to handle ebook files alongside your music collection.
 
 ## Features
 
-- **Ebook Detection**: Automatically discovers ebook files (EPUB, PDF, MOBI, LRF, AZW, AZW3) during import
-- **Metadata Extraction**: Extracts metadata from ebook files, with special support for EPUB format
-- **External Metadata Sources**: Enriches metadata using Google Books API and other sources
-- **Seamless Integration**: Works with existing Beets workflows and commands
-- **Custom Fields**: Adds ebook-specific fields like author, ISBN, publisher, page count, etc.
-- **File Type Filtering**: Import only specific ebook formats using the `--ext` option
+- **Multi-format Support**: Handle EPUB, PDF, MOBI, AZW, AZW3, LRF, CBR, and CBZ files
+- **Metadata Extraction**: Extract metadata from ebook files (especially EPUB and comic files)
+- **External APIs**: Enrich metadata using Google Books API
+- **Comic Book Support**: Special handling for CBR/CBZ comic files with series and issue tracking
+- **Beets Integration**: Seamlessly import ebooks alongside your music using Beets' powerful library system
+
+## Supported Formats
+
+- **EPUB** - Full metadata extraction using ebooklib
+- **PDF** - Basic metadata from filename parsing
+- **MOBI/AZW/AZW3** - Amazon Kindle formats (filename parsing)
+- **LRF** - Sony Reader format (filename parsing)
+- **CBR/CBZ** - Comic book archives with ComicInfo.xml support
 
 ## Installation
 
-### From Source (Development)
-
-1. Clone this repository:
-   ```bash
-   git clone https://github.com/yourusername/beets-ebooks.git
-   cd beets-ebooks
-   ```
-
-2. Install in development mode:
-   ```bash
-   pip install -e .
-   ```
-
-3. Enable the plugin in your Beets configuration file (`~/.config/beets/config.yaml`):
-   ```yaml
-   plugins: ebooks
-   
-   ebooks:
-     google_api_key: your_api_key_here  # Optional
-     download_covers: true
-     ebook_extensions: ['.epub', '.pdf', '.mobi', '.lrf', '.azw', '.azw3']
-     metadata_sources: ['google_books', 'open_library']
-   ```
-
-### From PyPI (When Available)
-
+1. Install the plugin:
 ```bash
 pip install beets-ebooks
 ```
 
-## Configuration
-
-Add the following to your Beets configuration:
-
+2. Enable the plugin in your Beets configuration file (`~/.config/beets/config.yaml`):
 ```yaml
-plugins: ebooks
-
-ebooks:
-  # Google Books API key for enhanced metadata (optional)
-  google_api_key: ''
-  
-  # Whether to download cover art
-  download_covers: true
-  
-  # File extensions to treat as ebooks
-  ebook_extensions: ['.epub', '.pdf', '.mobi', '.lrf', '.azw', '.azw3']
-  
-  # External metadata sources to use
-  metadata_sources: ['google_books', 'open_library']
+plugins: [..., ebooks]
 ```
 
-### Google Books API Setup
-
-To get enhanced metadata from Google Books:
-
-1. Go to the [Google Cloud Console](https://console.cloud.google.com/)
-2. Create a new project or select an existing one
-3. Enable the Google Books API
-4. Create credentials (API key)
-5. Add the API key to your Beets configuration
+3. Configure the plugin (optional):
+```yaml
+ebooks:
+    google_api_key: your_google_books_api_key  # Optional: for enhanced metadata
+    download_covers: true
+    ebook_extensions: [.epub, .pdf, .mobi, .lrf, .azw, .azw3, .cbr, .cbz]
+    metadata_sources: [google_books, open_library]
+    auto_import: true
+```
 
 ## Usage
 
-### Process Individual Ebooks
+### Import Ebooks into Beets Library
 
-The primary way to use this plugin is with the `ebook` command to process specific ebook files:
-
-```bash
-beet ebook /path/to/book.epub
-beet ebook /path/to/ebooks/
-```
-
-This will extract and display metadata for the specified ebook(s), including:
-- Basic metadata from filename parsing
-- EPUB metadata extraction (for .epub files)
-- Enhanced metadata from Google Books API
-
-### Example Output
+Use the dedicated import command to add ebooks to your library:
 
 ```bash
-$ beet ebook "J.R.R. Tolkien - The Lord of the Rings.epub"
-Processing ebook: J.R.R. Tolkien - The Lord of the Rings.epub
-Extracted metadata:
-  file_format: EPUB
-  path: /path/to/book.epub
-  book_author: J.R.R. Tolkien
-  book_title: The Lord of the Rings
-Fetching external metadata...
-External metadata:
-  published_year: 2001
-  publisher: Mariner Books
-  page_count: 1176
-  language: en
+# Import a single ebook
+beet import-ebooks /path/to/book.epub
+
+# Import all ebooks in a directory
+beet import-ebooks /path/to/ebook/directory/
+
+# Import multiple files/directories
+beet import-ebooks book1.pdf book2.epub /path/to/comics/
 ```
 
-### Batch Processing
+### View Ebook Metadata
 
-Process all ebooks in a directory:
+Display metadata for ebook files without importing:
 
 ```bash
-beet ebook /path/to/ebook/collection/
+# Show metadata for specific files
+beet ebook book.epub comic.cbz
+
+# Process multiple files
+beet ebook *.epub *.cbz
 ```
 
-### Integration with Beets Import
+### Query Your Ebook Library
 
-Currently, this plugin works alongside beets but doesn't integrate directly with the `beet import` command, as beets is primarily designed for music files. The plugin provides a separate `ebook` command for ebook management.
-
-### File Type Filtering
-
-To import only specific ebook formats, use the `--ext` option with the `beet ebook` command:
+Once imported, you can query your ebooks using standard Beets queries:
 
 ```bash
-beet ebook --ext epub,mobi /path/to/ebooks/
+# List all ebooks
+beet ls ebook:true
+
+# Find books by author
+beet ls book_author:tolkien
+
+# Find books by title
+beet ls book_title:'lord of the rings'
+
+# Find comics by series
+beet ls series:batman
+
+# Find books by format
+beet ls file_format:epub
+beet ls file_format:cbz
+
+# Complex queries
+beet ls ebook:true published_year:2020..2023
 ```
 
-This will process only the files with the specified extensions.
+## Comic Book Features
 
-## Ebook Fields
+The plugin provides special support for comic book files:
 
-The plugin adds the following fields to your Beets library:
+### Filename Parsing
+Comic files with naming patterns like "Batman - Detective Comics 001.cbz" are automatically parsed to extract:
+- **Series**: Batman
+- **Title**: Detective Comics  
+- **Issue Number**: 1
 
-- `book_author`: The book's author(s)
-- `book_title`: The book's title
-- `isbn`: ISBN number
-- `published_year`: Year of publication
-- `publisher`: Publisher name
-- `page_count`: Number of pages
-- `language`: Language code (e.g., 'en', 'fr')
-- `file_format`: File format (EPUB, PDF, etc.)
+### ComicInfo.xml Support
+If CBR/CBZ files contain a ComicInfo.xml file, the plugin extracts:
+- Title, Series, Writer, Publisher
+- Issue number, page count, year
+- Genre, summary, language
 
-## Supported File Formats
+### Comic-Specific Fields
+- `series` - Comic book series name
+- `issue_number` - Issue number within the series
+- `genre` - Comic genre (Action, Adventure, etc.)
+- `summary` - Plot summary or description
 
-- **EPUB** (.epub) - Full metadata extraction supported
-- **PDF** (.pdf) - Basic metadata extraction
-- **MOBI** (.mobi) - Basic filename parsing
-- **LRF** (.lrf) - Basic filename parsing  
-- **AZW/AZW3** (.azw, .azw3) - Basic filename parsing
+## Database Schema
 
-## Development
+The plugin adds these fields to your Beets database:
 
-### Setting Up Development Environment
+### General Ebook Fields
+- `book_author` - Author name
+- `book_title` - Book title
+- `isbn` - ISBN identifier
+- `published_year` - Publication year
+- `publisher` - Publisher name
+- `page_count` - Number of pages
+- `language` - Language code
+- `file_format` - File format (EPUB, PDF, etc.)
+- `ebook` - Boolean flag to identify ebooks
 
-1. Clone the repository
-2. Create a virtual environment:
-   ```bash
-   python -m venv venv
-   source venv/bin/activate  # On Windows: venv\Scripts\activate
-   ```
-
-3. Install dependencies:
-   ```bash
-   pip install -r requirements.txt
-   pip install -e .
-   ```
-
-4. Run tests:
-   ```bash
-   python -m pytest tests/
-   ```
-
-### Contributing
-
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Add tests for new functionality
-5. Submit a pull request
+### Comic-Specific Fields
+- `series` - Comic series name
+- `issue_number` - Issue number
+- `genre` - Genre classification
+- `summary` - Plot summary
 
 ## Dependencies
 
-- **beets** >= 1.6.0 - The music library manager this plugin extends
-- **requests** >= 2.25.0 - For making API calls to metadata sources
-- **ebooklib** >= 0.18 - For EPUB metadata extraction
-- **PyPDF2** >= 3.0.0 - For PDF metadata extraction
+### Required
+- `beets >= 1.6.0` - Core music library manager
+- `requests >= 2.25.0` - HTTP requests for API calls
+
+### Optional
+- `ebooklib >= 0.18` - Enhanced EPUB metadata extraction
+- `rarfile >= 4.0` - CBR file support (requires unrar/7zip)
+
+## Configuration Options
+
+```yaml
+ebooks:
+    # Google Books API key for enhanced metadata
+    google_api_key: ''
+    
+    # Download cover art (when available)
+    download_covers: true
+    
+    # File extensions to recognize as ebooks
+    ebook_extensions: [.epub, .pdf, .mobi, .lrf, .azw, .azw3, .cbr, .cbz]
+    
+    # External metadata sources
+    metadata_sources: [google_books, open_library]
+    
+    # Automatically import ebooks during 'beet import'
+    auto_import: true
+```
+
+## Examples
+
+### Basic Usage
+```bash
+# Import some ebooks
+beet import-ebooks ~/Books/
+
+# Check what was imported
+beet ls ebook:true
+
+# Find fantasy books
+beet ls genre:fantasy
+
+# Find comics by publisher
+beet ls publisher:'DC Comics'
+```
+
+### Advanced Queries
+```bash
+# Recent books by publication year
+beet ls ebook:true published_year:2020..
+
+# Large books
+beet ls ebook:true page_count:500..
+
+# Comics with specific issue ranges
+beet ls series:batman issue_number:1..10
+
+# Books in specific languages
+beet ls language:en
+```
+
+## Development
+
+This plugin is designed to gracefully handle missing dependencies. It will work with basic functionality even if optional libraries like `ebooklib` or `rarfile` are not installed.
+
+For development setup:
+```bash
+git clone https://github.com/yourusername/beets-ebooks
+cd beets-ebooks
+pip install -e .
+```
+
+## Contributing
+
+Contributions are welcome! Please feel free to submit issues and enhancement requests.
 
 ## License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
-## Acknowledgments
-
-- [Beets](https://beets.io/) - The excellent music library manager that inspired this plugin
-- [Google Books API](https://developers.google.com/books) - For providing book metadata
-- The open-source community for the various ebook processing libraries
+This project is licensed under the MIT License - see the LICENSE file for details.
